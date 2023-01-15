@@ -1,4 +1,4 @@
-module github.com/zijiren233/tgbotapi/v6
+module github.com/zijiren233/tg-bot-api/v6
 
 go 1.19
 
