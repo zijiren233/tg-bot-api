@@ -40,7 +40,7 @@ type Callback struct {
 	once           sync.Once
 }
 
-func ParseCbkData(cbkData CallbackQuery) *ChanData {
+func ParseCbkData(cbkData *CallbackQuery) *ChanData {
 	before, after, found := strings.Cut(cbkData.Data, ":")
 	data := &ChanData{}
 	data.Key = before
