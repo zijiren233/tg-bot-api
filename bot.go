@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
 
@@ -569,24 +568,21 @@ func (bot *BotAPI) ListenForWebhook(pattern string) UpdatesChannel {
 	return ch
 }
 
-func (bot *BotAPI) ListenForWebhookWithGin(pattern string, eng *gin.Engine) UpdatesChannel {
+func (bot *BotAPI) NewWebhookHandler() (UpdatesChannel, func(w http.ResponseWriter, r *http.Request)) {
 	ch := make(chan Update, bot.Buffer)
 
-	eng.POST(pattern, func(ctx *gin.Context) {
-		var update Update
-		err := json.NewDecoder(ctx.Request.Body).Decode(&update)
+	return ch, func(w http.ResponseWriter, r *http.Request) {
+		update, err := bot.HandleUpdate(r)
 		if err != nil {
 			errMsg, _ := json.Marshal(map[string]string{"error": err.Error()})
-			ctx.Writer.WriteHeader(http.StatusBadRequest)
-			ctx.Writer.Header().Set("Content-Type", "application/json")
-			ctx.Writer.Write(errMsg)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(errMsg)
 			return
 		}
 
-		ch <- update
-	})
-
-	return ch
+		ch <- *update
+	}
 }
 
 // ListenForWebhookRespReqFormat registers a http handler for a single incoming webhook.
