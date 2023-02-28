@@ -32,9 +32,10 @@ type BotAPI struct {
 	Self   User       `json:"-"`
 	Client HTTPClient `json:"-"`
 
-	apiEndpoint string
-	stoppers    []context.CancelFunc
-	mu          sync.RWMutex
+	apiEndpoint         string
+	stoppers            []context.CancelFunc
+	mu                  sync.RWMutex
+	callbackMap, msgMap *sync.Map
 }
 
 type botClient struct {
@@ -78,6 +79,8 @@ func NewBotAPIWithClient(token, apiEndpoint string, client HTTPClient) (*BotAPI,
 		Buffer: 100,
 
 		apiEndpoint: apiEndpoint,
+		callbackMap: new(sync.Map),
+		msgMap:      new(sync.Map),
 	}
 
 	self, err := bot.GetMe()

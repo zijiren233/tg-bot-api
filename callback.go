@@ -3,23 +3,20 @@ package tgbotapi
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 )
 
-// chatid:msgid -> *Callback
-var callbackMap = new(sync.Map)
-var msgMap = new(sync.Map)
-
-func FindCbk(chatID, userID int64, msgID int) (*Callback, bool) {
-	if ch, ok := callbackMap.Load(fmt.Sprintf("%v:%v:%v", chatID, msgID, userID)); ok {
+func (bot *BotAPI) FindCbk(chatID, userID int64, msgID int) (*Callback, bool) {
+	if ch, ok := bot.callbackMap.Load(fmt.Sprintf("%v:%v:%v", chatID, msgID, userID)); ok {
 		return ch.(*Callback), true
 	} else {
 		return nil, false
 	}
 }
 
-func FindMsgCbk(chatID, userID int64) (*Msg, bool) {
-	if ch, ok := msgMap.Load(fmt.Sprintf("%v:%v", chatID, userID)); ok {
+func (bot *BotAPI) FindMsgCbk(chatID, userID int64) (*Msg, bool) {
+	if ch, ok := bot.msgMap.Load(fmt.Sprintf("%v:%v", chatID, userID)); ok {
 		return ch.(*Msg), true
 	} else {
 		return nil, false
@@ -36,13 +33,27 @@ type ChanData struct {
 }
 
 type Callback struct {
+	cbkMap         *sync.Map
 	chatID, userID int64
 	msgID          int
 	cbChan         CallBackChan
 	once           sync.Once
 }
 
+func ParseCbkData(cbkData CallbackQuery) *ChanData {
+	before, after, found := strings.Cut(cbkData.Data, ":")
+	data := &ChanData{}
+	data.Key = before
+	if found {
+		data.Value = after
+	} else {
+		data.Value = before
+	}
+	return data
+}
+
 type Msg struct {
+	cbkMap         *sync.Map
 	chatID, userID int64
 	msgChan        MsgChan
 	closeOnce      sync.Once
@@ -50,13 +61,13 @@ type Msg struct {
 
 func (cb *Callback) Close() {
 	cb.once.Do(func() {
-		callbackMap.Delete(fmt.Sprintf("%v:%v:%v", cb.chatID, cb.msgID, cb.userID))
+		cb.cbkMap.Delete(fmt.Sprintf("%v:%v:%v", cb.chatID, cb.msgID, cb.userID))
 		close(cb.cbChan)
 	})
 }
 
-func CloseCbkChan(chatID, userID int64, msgID int) error {
-	if value, loaded := callbackMap.LoadAndDelete(fmt.Sprintf("%v:%v:%v", chatID, msgID, userID)); loaded {
+func (bot *BotAPI) CloseCbkChan(chatID, userID int64, msgID int) error {
+	if value, loaded := bot.callbackMap.LoadAndDelete(fmt.Sprintf("%v:%v:%v", chatID, msgID, userID)); loaded {
 		value.(*Callback).Close()
 		return nil
 	} else {
@@ -84,12 +95,12 @@ func newCallbackChan(buffer int) CallBackChan {
 	return make(CallBackChan, buffer)
 }
 
-func NewCbk(chatID, userID int64, messageID int) (*Callback, error) {
-	if _, ok := callbackMap.Load(fmt.Sprintf("%v:%v:%v", chatID, messageID, userID)); ok {
+func (bot *BotAPI) NewCbk(chatID, userID int64, messageID int) (*Callback, error) {
+	if _, ok := bot.callbackMap.Load(fmt.Sprintf("%v:%v:%v", chatID, messageID, userID)); ok {
 		return nil, errors.New("user cbk arlready exists")
 	}
-	cbk := Callback{once: sync.Once{}, chatID: chatID, userID: userID, msgID: messageID, cbChan: newCallbackChan(0)}
-	callbackMap.Store(fmt.Sprintf("%v:%v:%v", chatID, messageID, userID), &cbk)
+	cbk := Callback{once: sync.Once{}, cbkMap: bot.callbackMap, chatID: chatID, userID: userID, msgID: messageID, cbChan: newCallbackChan(0)}
+	bot.callbackMap.Store(fmt.Sprintf("%v:%v:%v", chatID, messageID, userID), &cbk)
 	return &cbk, nil
 }
 
@@ -97,24 +108,24 @@ func newMsgChan(buffer int) MsgChan {
 	return make(chan Message, buffer)
 }
 
-func NewMsgCbk(chatID, userID int64) (*Msg, error) {
-	if _, ok := msgMap.Load(fmt.Sprintf("%v:%v", chatID, userID)); ok {
+func (bot *BotAPI) NewMsgCbk(chatID, userID int64) (*Msg, error) {
+	if _, ok := bot.msgMap.Load(fmt.Sprintf("%v:%v", chatID, userID)); ok {
 		return nil, errors.New("user msg cbk already exists")
 	}
-	msg := Msg{closeOnce: sync.Once{}, chatID: chatID, userID: userID, msgChan: newMsgChan(0)}
-	msgMap.Store(fmt.Sprintf("%v:%v", chatID, userID), &msg)
+	msg := Msg{closeOnce: sync.Once{}, cbkMap: bot.msgMap, chatID: chatID, userID: userID, msgChan: newMsgChan(0)}
+	bot.msgMap.Store(fmt.Sprintf("%v:%v", chatID, userID), &msg)
 	return &msg, nil
 }
 
 func (cb *Msg) Close() {
 	cb.closeOnce.Do(func() {
-		msgMap.Delete(fmt.Sprintf("%v:%v", cb.chatID, cb.userID))
+		cb.cbkMap.Delete(fmt.Sprintf("%v:%v", cb.chatID, cb.userID))
 		close(cb.msgChan)
 	})
 }
 
-func CloseMsgChan(chatID, userID int64) error {
-	if value, loaded := msgMap.LoadAndDelete(fmt.Sprintf("%v:%v", chatID, userID)); loaded {
+func (bot *BotAPI) CloseMsgChan(chatID, userID int64) error {
+	if value, loaded := bot.msgMap.LoadAndDelete(fmt.Sprintf("%v:%v", chatID, userID)); loaded {
 		value.(*Msg).Close()
 		return nil
 	} else {
