@@ -23,9 +23,9 @@ func (bot *BotAPI) FindMsgCbk(chatID, userID int64) (*Msg, bool) {
 	}
 }
 
-type CallBackChan chan ChanData
+type CallBackChan chan *ChanData
 
-type MsgChan chan Message
+type MsgChan chan *Message
 
 type ChanData struct {
 	Key   string
@@ -105,7 +105,7 @@ func (bot *BotAPI) NewCbk(chatID, userID int64, messageID int) (*Callback, error
 }
 
 func newMsgChan(buffer int) MsgChan {
-	return make(chan Message, buffer)
+	return make(MsgChan, buffer)
 }
 
 func (bot *BotAPI) NewMsgCbk(chatID, userID int64) (*Msg, error) {
